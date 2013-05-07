@@ -39,10 +39,60 @@
 {
 	// always call "super" init
 	// Apple recommends to re-assign "self" with the "super's" return value
-	if( (self=[super initWithColor:ccc4(255, 255, 255, 255) ]) )
-    {        
+	if( (self=[super initWithColor:ccc4(56, 178, 240, 255) ]) )
+    {
+		CGSize winSize = [[CCDirector sharedDirector] winSize];
+		background = [CCSprite spriteWithFile:@"Cat_v7_02_MG_Land.png"];
+		sun        = [CCSprite spriteWithFile:@"Cat_v7_08.1_Sun.png"];
+		CCSprite *trees = [CCSprite spriteWithFile:@"Cat_v7_01_FG_Trees.png"];
+		CGRect treesRect = [trees textureRect];
+		trees.position = ccp(0,winSize.height - treesRect.size.height);
+		sun.position = ccp(winSize.width - 100, winSize.height - 100);
+		background.position = ccp(winSize.width/2 + 100, winSize.height/2);
+		[self addChild:sun];
+		[self addChild:background];
+		[self addChild:trees];
+		
+		CCLabelTTF *touchcount = [CCLabelTTF labelWithString:@"Tapcount: 0" fontName:@"Marker Felt" fontSize:32];
+		CCLabelTTF *frequency  = [CCLabelTTF labelWithString:@"speed: 0" fontName:@"Marker Felt" fontSize:32];
+		CGRect touchCountRect = [touchcount textureRect];
+		CGRect frequencyRect = [frequency textureRect];
+		touchcount.position = ccp(touchCountRect.size.width/2 + 20, winSize.height/2 + 100);
+		frequency.position  = ccp( frequencyRect.size.width/2 + 20, winSize.height/2 + 140);
+		[self addChild: touchcount z:0 tag:1];
+		[self addChild:  frequency z:0  tag:2];
+		tapcount = 0;
+		self.touchTimeStamp = [[NSDate  alloc] init];
+		self.prevTimeStamp  = self.touchTimeStamp;
+		catMoving      = NO;
+		catGrabbing    = NO;
+		frameCount     = 0;
+		
+		/* First Animation  */
+		[[CCSpriteFrameCache sharedSpriteFrameCache] addSpriteFramesWithFile:@"CAT.plist"];
+		CCSpriteBatchNode *spriteSheet = [CCSpriteBatchNode batchNodeWithFile:@"CAT.png"];
+		[self addChild:spriteSheet];
+		NSMutableArray *walkAnimFrames = [NSMutableArray array];
+		for (int i=1; i<=2; i++) {
+			[walkAnimFrames addObject:
+			 [[CCSpriteFrameCache sharedSpriteFrameCache] spriteFrameByName:
+			  [NSString stringWithFormat:@"Cat_v7_04.%d_Cat-Run-In.png",i]]];
+		}
+		CCAnimation *walkAnim = [CCAnimation
+								 animationWithSpriteFrames:walkAnimFrames delay:0.1f];
+		self.cat = [CCSprite spriteWithSpriteFrameName:@"Cat_v7_04.1_Cat-Run-In.png"];
+		CGRect catRect = [self.cat textureRect];
+		self.cat.position = ccp(catRect.size.width, winSize.height/2 - catRect.size.height);
+		self.walkAction = [CCRepeatForever actionWithAction:
+						   [CCAnimate actionWithAnimation:walkAnim]];
+		self.walkAction.tag = 1;
+		//[self.cat runAction:self.walkAction];
+		[spriteSheet addChild:self.cat];
+		
+		
         [self schedule:@selector(nextFrame:)];
-        [self schedule:@selector(gameLogic:) interval:1.0];
+//        [self schedule:@selector(gameLogic:) interval:1.0];
+		[self schedule:@selector(sunLogic:) interval:0.5];
         self.isTouchEnabled = YES;
 	}
 	return self;
@@ -50,53 +100,58 @@
 
 -(void) nextFrame:(ccTime) dt
 {
-    seeker.position = ccp( seeker.position.x, seeker.position.y + 100 * dt );
-    CGSize size = [[CCDirector sharedDirector] winSize];
-    CGRect seekerRect = [seeker textureRect];
-    float seekerWidth = seekerRect.size.width;
-    if (seeker.position.x > size.width + 32 )
-    {
-        seeker.position = ccp( - seekerWidth, seeker.position.y);
-    }
-}
+	CGSize winSize = [[CCDirector sharedDirector] winSize];
+	CGRect catRect = [self.cat textureRect];
 
+	if (self.cat.position.x < winSize.width - catRect.size.width - 125 && tapcount != 0) {
+		self.cat.position   = ccp(self.cat.position.x   + 75 * dt, self.cat.position.y  );
+		background.position = ccp(background.position.x - 75 * dt, background.position.y);
+		if (!catMoving) {
+			[self.cat runAction:self.walkAction];
+			catMoving = YES;
+		}
+	} else {
+		[self.cat stopAction:self.walkAction];
+		catGrabbing = YES;
+		catMoving   = NO;
+	}
+
+}
+-(void) sunLogic:(ccTime) dt
+{
+	if (frameCount % 5 == 0) {
+		CCTexture2D* tex = [[CCTextureCache sharedTextureCache] addImage:@"Cat_v7_08.2_Sun.png"];
+		[sun setTexture:tex];
+		
+	} else {
+		CCTexture2D* tex = [[CCTextureCache sharedTextureCache] addImage:@"Cat_v7_08.1_Sun.png"];
+		[sun setTexture:tex];
+	}
+	frameCount++;
+}
 -(void) gameLogic:(ccTime) dt
 {
-    [self addAnt];
+
 }
 
 
--(void) addAnt
-{
-    CCSprite *ant = [CCSprite spriteWithFile:@"ant.png"];
-    CGSize winSize= [CCDirector sharedDirector].winSize;
-
-    ant.scale     = ant.scale/32;
-    ant.rotation  = - 90;
-    int maxX      = winSize.width;
-    ant.position  = ccp(arc4random() % maxX, winSize.height);
-
-    [self addChild:ant];
-    
-    // Determine speed of the monster
-    int minDuration = 2.0;
-    int maxDuration = 10.0;
-    int rangeDuration = maxDuration - minDuration;
-    int actualDuration = (arc4random() % rangeDuration) + minDuration;
-    
-    // Create the actions
-    CCMoveTo * actionMove = [CCMoveTo actionWithDuration:actualDuration
-                                                position:ccp(ant.position.x, ant.position.y - 1000)];
-    CCCallBlockN * actionMoveDone = [CCCallBlockN actionWithBlock:^(CCNode *node) {
-        [node removeFromParentAndCleanup:YES];
-    }];
-    [ant runAction:[CCSequence actions:actionMove, actionMoveDone, nil]];
-    
-}   
-
+#pragma mark touch events
 -(void) registerWithTouchDispatcher
 {
 	[[[CCDirector sharedDirector] touchDispatcher] addTargetedDelegate:self priority:0 swallowsTouches:YES];
+}
+
+- (void) updatetouchcount
+{
+	CCLabelTTF *touchcount = (CCLabelTTF*)[self getChildByTag:1];
+	[touchcount setString:[NSString stringWithFormat:@"Tapcount: %d",tapcount]];
+}
+
+- (void) updateFrequency:(time_t)timeDiff_v count:(int)tapcount_v
+{
+	CCLabelTTF *frequency = (CCLabelTTF*)[self getChildByTag:2];
+	double speed =  (double)tapcount_v/((double)timeDiff_v);
+	[frequency setString:[NSString stringWithFormat:@"Speed: %f",speed]];
 }
 
 - (BOOL) ccTouchBegan:(UITouch *)touch withEvent:(UIEvent *)event
@@ -107,19 +162,23 @@
 
 - (void) ccTouchEnded:(UITouch *)touch withEvent:(UIEvent *)event
 {
-    CGPoint location = [self convertTouchToNodeSpace: touch];
-    CCSprite *toRemove;
-    for ( CCSprite * ant in [self children] ){
-        if ( CGRectContainsPoint(ant.boundingBox, location)){
-            NSLog(@"Ant TOuched");
-            toRemove = ant;
-            CCSprite *blood = [CCSprite spriteWithFile:@"blood.png"];
-            blood.position  = ant.position;
-            blood.scale     = blood.scale/8;
-            [self addChild:blood];
-        }
-    }
-    [self removeChild:toRemove cleanup:YES];
+	tapcount++;
+	self.touchTimeStamp =[NSDate  date];
+	NSTimeInterval timeDiff = [self.touchTimeStamp timeIntervalSinceDate:self.prevTimeStamp];
+	tapVelocity = tapcount / timeDiff;
+	[self updatetouchcount];
+	CCLabelTTF *speed = (CCLabelTTF*)[self getChildByTag:2];
+	[speed setString:[NSString stringWithFormat:@"Speed: %d",tapVelocity]];
+	self.prevTimeStamp = self.touchTimeStamp;
+	if (catGrabbing == YES) {
+
+//		if (tapVelocity < 200) {
+//			￼
+//		}
+//		if (tapVelocity >= 200 && tapVelocity < 600) {
+//			
+//		}
+	}
 }
 
 -(void) ccTouchMoved:(UITouch *)touch withEvent:(UIEvent *)event
